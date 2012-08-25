@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 from copy import copy
 from datetime import datetime
-from os.path import basename, abspath, dirname, isfile, join
+from os.path import basename, abspath, dirname, isfile, join, expanduser
 from fabric.api import env, puts, abort, cd, hide, task
 from fabric.operations import sudo, settings, run
 from fabric.contrib import console
-from fabric.contrib.files import upload_template
+from fabric.contrib.files import upload_template, append
 
 from fabric.colors import _wrap_with, green
 
@@ -33,6 +33,7 @@ def setup():
     puts(green_bg('Start setup...'))
     start_time = datetime.now()
 
+    _push_key()
     _verify_sudo
     _install_dependencies()
     _create_django_user()
@@ -439,3 +440,16 @@ def _supervisor_restart():
         print red_bg("%s NOT STARTED!" % env.supervisor_program_name)
     else:
         print green_bg("%s correctly started!" % env.supervisor_program_name)
+
+
+def _read_key_file(key_file):
+    key_file = expanduser(key_file)
+    if not key_file.endswith('pub'):
+        raise RuntimeWarning('Trying to push non-public part of key pair')
+    with open(key_file) as f:
+        return f.read()
+
+
+def _push_key(key_file='~/.ssh/id_rsa.pub'):
+    key_text = _read_key_file(key_file)
+    append('~/.ssh/authorized_keys', key_text)
