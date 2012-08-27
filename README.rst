@@ -38,7 +38,7 @@ If you have pip install available on your system, just type::
 
 If you've already got an old version of Fagungis, and want to upgrade, use::
 
-    pip install -U django-fagungis
+    pip install -U git+https://github.com/damianmoore/django-fagungis.git
 
 Installing from a directory
 ---------------------------
