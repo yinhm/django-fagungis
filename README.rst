@@ -34,7 +34,7 @@ Using pip
 ---------
 If you have pip install available on your system, just type::
 
-    pip install django-fagungis
+    pip install git+https://github.com/damianmoore/django-fagungis.git
 
 If you've already got an old version of Fagungis, and want to upgrade, use::
 
@@ -67,7 +67,7 @@ have prepared for you an example file in **path/to/fagungis/example_fabfile.py**
 so you can create a copy of this file and modify it according to your
 needs.
 
-You can find also an online version of **example_fabfile.py** here: https://bitbucket.org/DNX/django-fagungis/src/tip/fagungis/example_fabfile.py
+You can find also an online version of **example_fabfile.py** here: https://raw.github.com/damianmoore/django-fagungis/master/fagungis/example_fabfile.py
 
 Please pay attention to not have any tasks in your fabfile.py called:
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
