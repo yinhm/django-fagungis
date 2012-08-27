@@ -11,6 +11,8 @@ def example():
     env.project = 'example_production'
     #  hg repository of your project
     env.repository = 'https://bitbucket.org/DNX/example'
+    #  type of repository (git or hg)
+    env.repository_type = 'hg'
     #  hosts to deploy your project, users must be sudoers
     env.hosts = ['root@192.168.1.1', ]
     # additional packages to be installed on the server

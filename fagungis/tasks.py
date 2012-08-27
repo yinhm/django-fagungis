@@ -38,8 +38,10 @@ def setup():
     _install_dependencies()
     _create_django_user()
     _setup_directories()
-    # _hg_clone()
-    _git_clone()
+    if env.repository_type == 'hg':
+        _hg_clone()
+    else:
+        _git_clone()
     _install_virtualenv()
     _create_virtualenv()
     _install_gunicorn()
@@ -68,8 +70,10 @@ def deploy():
     puts(green_bg('Start deploy...'))
     start_time = datetime.now()
 
-    # hg_pull()
-    git_pull()
+    if env.repository_type == 'hg':
+        hg_pull()
+    else:
+        git_pull()
     _install_requirements()
     _upload_nginx_conf()
     _upload_rungunicorn_script()

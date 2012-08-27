@@ -97,27 +97,27 @@ If you run **test_configuration** manually, you'll observe some output about all
 Do you need an example?
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Ok, let's assume you want to configure your django project called "projectus".
-So, what we know about it?
-we know:
+OK, let's assume you want to configure your django project called "simpleproject".
+So, what do we know about it?
+We know:
 
-* the project is called **projectus**
+* the project is called **simpleproject**
 
-* the hg repository is **https://bitbucket.org/DNX/projectus**
+* the git repository is **https://github.com/damianmoore/django-simple-project.git**
 
-* the ip of the server where you want to host it is: **88.88.88.88**
+* the IP of the server where you want to host it is: **88.88.88.88**
 
-* you want to use the domain **www.projectus.org** which point to 88.88.88.88
+* you want to use the domain **simpleproject.org** which points to 88.88.88.88
 
 
-Ok, it's enough to configure and deploy your project, let's do it!
+OK, it's enough to configure and deploy your project, let's do it!
 Clone example_fabfile.py::
 
     cp path/to/fagungis/example_fabfile.py path/to/projectus/fabfile.py
 
 or::
 
-    wget -O fabfile.py https://bitbucket.org/DNX/django-fagungis/raw/tip/fagungis/example_fabfile.py
+    wget -O fabfile.py https://raw.github.com/damianmoore/django-fagungis/master/fagungis/example_fabfile.py
 
 
 Now apply some changes to earlier cloned fabfile.py file in your project root:
@@ -129,27 +129,34 @@ Now apply some changes to earlier cloned fabfile.py file in your project root:
     def example():
     # to:
     @task
-    def projectus():
+    def simpleproject():
 
 * change project name::
 
     # from:
     env.project = 'example_production'
     # to:
-    env.project = 'projectus'
+    env.project = 'simpleproject'
 
 * change repository::
 
     # from:
     env.repository = 'https://bitbucket.org/DNX/example'
     # to:
-    env.repository = 'https://bitbucket.org/DNX/projectus'
+    env.repository = 'https://github.com/damianmoore/django-simple-project.git'
 
-* change server ip::
+* change repository type::
+
+    # from:
+    env.repository_type = 'hg'
+    # to:
+    env.repository_type = 'git'
+
+* change server IP::
 
     # from:
     env.hosts = ['root@192.168.1.1', ]
-    # to:
+    # to: (or whatever the address of your server is)
     env.hosts = ['root@88.88.88.88', ]
 
 * change nginx server name::
@@ -157,11 +164,11 @@ Now apply some changes to earlier cloned fabfile.py file in your project root:
     # from:
     env.nginx_server_name = 'example.com'
     # to:
-    env.nginx_server_name = 'projectus.org'
+    env.nginx_server_name = 'simpleproject.org'
 
 not, let's test our configuration::
 
-    fab projectus test_configuration
+    fab simpleproject test_configuration
 
 you must see a message::
 
@@ -173,7 +180,7 @@ Setup your project
 
 Assuming you've configured your project now you are ready to launch the setup::
 
-    fab projectus setup
+    fab simpleproject setup
 
 during this process you can see all the output of the commands launched on
 the server. At some point you may be asked for some information as django
@@ -191,13 +198,14 @@ Deploy the project
 After you've run the setup you're ready to deploy your project. This is as
 simple as typing::
 
-    fab projectus deploy
+    fab simpleproject deploy
 
 As for setup you may be asked for some info during the deployment.
 At the end you must view a message saying that the deployment successful
 ended.
-Now navigate to **http://projectus.org** in your browser and assure that
-everything is O.K.
+Set the IP address of your server to simpleproject.org in your /etc/hosts file.
+Now navigate to **http://simpleproject.org** in your browser and assure that
+everything is OK.
 
 
 How to test fagungis?
