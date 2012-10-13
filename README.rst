@@ -42,7 +42,7 @@ If you've already got an old version of Fagungis, and want to upgrade, use::
 
 Installing from a directory
 ---------------------------
-If you've obtained a copy of Fagungis using either Mercurial or a downloadable
+If you've obtained a copy of Fagungis using either Git or a downloadable
 archive, you'll need to install the copy you have system-wide. Try running::
 
     python setup.py develop

@@ -6,7 +6,7 @@ from os.path import basename, abspath, dirname, isfile, join, expanduser
 from fabric.api import env, puts, abort, cd, hide, task
 from fabric.operations import sudo, settings, run
 from fabric.contrib import console
-from fabric.contrib.files import upload_template, append
+from fabric.contrib.files import upload_template, append, exists
 
 from fabric.colors import _wrap_with, green
 
@@ -33,11 +33,13 @@ def setup():
     puts(green_bg('Start setup...'))
     start_time = datetime.now()
 
-    _push_key()
-    _verify_sudo
-    _install_dependencies()
-    _create_django_user()
-    _setup_directories()
+    if not _directories_exist():
+        _push_key()
+        _verify_sudo
+        _install_dependencies()
+        _create_django_user()
+        _setup_directories()
+
     if env.repository_type == 'hg':
         _hg_clone()
     else:
@@ -352,10 +354,14 @@ def _setup_directories():
     sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
     sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
     sudo('mkdir -p %s' % dirname(env.rungunicorn_script))
-    # sudo('mkdir -p %(django_user_home)s/tmp' % env)  # Not used
+    sudo('mkdir -p %(django_user_home)s/tmp' % env)
     sudo('mkdir -p %(virtenv)s' % env)
     sudo('mkdir -p %(nginx_htdocs)s' % env)
     sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
+
+
+def _directories_exist():
+    return exists(dirname(env.rungunicorn_script), use_sudo=True)
 
 
 def virtenvrun(command):
@@ -421,10 +427,10 @@ def _upload_supervisord_conf():
 
 def _prepare_django_project():
     with cd(env.django_project_root):
-        virtenvrun('./manage.py syncdb --noinput --verbosity=1')
+        virtenvrun('python manage.py syncdb --noinput --verbosity=1')
         if env.south_used:
-            virtenvrun('./manage.py migrate --noinput --verbosity=1')
-        virtenvsudo('./manage.py collectstatic --noinput')
+            virtenvrun('python manage.py migrate --noinput --verbosity=1')
+        virtenvsudo('python manage.py collectstatic --noinput')
 
 
 def _prepare_media_path():
