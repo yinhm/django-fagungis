@@ -78,9 +78,11 @@ Please pay attention to not have any tasks in your fabfile.py called:
 
 * test_configuration
 
-or
-
 * hg_pull
+
+* git_pull
+
+* remove
 
 because these names are reserved by Fagungis.
 

@@ -40,6 +40,7 @@ def setup():
         _create_django_user()
         _setup_directories()
 
+    _setup_project_directories()
     if env.repository_type == 'hg':
         _hg_clone()
     else:
@@ -48,9 +49,9 @@ def setup():
     _create_virtualenv()
     _install_gunicorn()
     _install_requirements()
-    _upload_nginx_conf()
     _upload_rungunicorn_script()
     _upload_supervisord_conf()
+    _upload_nginx_conf()
 
     end_time = datetime.now()
     finish_message = '[%s] Correctly finished in %i seconds' % \
@@ -86,6 +87,28 @@ def deploy():
 
     end_time = datetime.now()
     finish_message = '[%s] Correctly deployed in %i seconds' % \
+    (green_bg(end_time.strftime('%H:%M:%S')), (end_time - start_time).seconds)
+    puts(finish_message)
+
+@task
+def remove():
+    #  test configuration start
+    if not test_configuration():
+        if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+    #  test configuration end
+    if env.ask_confirmation:
+        if not console.confirm("Are you sure you want to remove %s?" % red_bg(env.project.upper()), default=False):
+            abort("Aborting at user request.")
+    puts(green_bg('Start remove...'))
+    start_time = datetime.now()
+
+    _remove_project_files()
+    _reload_supervisorctl()
+    _reload_nginx()
+
+    end_time = datetime.now()
+    finish_message = '[%s] Correctly finished in %i seconds' % \
     (green_bg(end_time.strftime('%H:%M:%S')), (end_time - start_time).seconds)
     puts(finish_message)
 
@@ -338,30 +361,49 @@ def _create_virtualenv():
 def _setup_directories():
     sudo('mkdir -p %(projects_path)s' % env)
     # sudo('mkdir -p %(django_user_home)s/logs/nginx' % env)  # Not used
-    # prepare gunicorn_logfile
+    # prepare gunicorn_logfile directory
     sudo('mkdir -p %s' % dirname(env.gunicorn_logfile))
     sudo('chown %s %s' % (env.django_user, dirname(env.gunicorn_logfile)))
     sudo('chmod -R 775 %s' % dirname(env.gunicorn_logfile))
-    sudo('touch %s' % env.gunicorn_logfile)
-    sudo('chown %s %s' % (env.django_user, env.gunicorn_logfile))
-    # prepare supervisor_stdout_logfile
+    # prepare supervisor_stdout_logfile directory
     sudo('mkdir -p %s' % dirname(env.supervisor_stdout_logfile))
     sudo('chown %s %s' % (env.django_user, dirname(env.supervisor_stdout_logfile)))
     sudo('chmod -R 775 %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('touch %s' % env.supervisor_stdout_logfile)
-    sudo('chown %s %s' % (env.django_user, env.supervisor_stdout_logfile))
-
     sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
     sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
     sudo('mkdir -p %s' % dirname(env.rungunicorn_script))
     sudo('mkdir -p %(django_user_home)s/tmp' % env)
-    sudo('mkdir -p %(virtenv)s' % env)
     sudo('mkdir -p %(nginx_htdocs)s' % env)
     sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
 
 
 def _directories_exist():
-    return exists(dirname(env.rungunicorn_script), use_sudo=True)
+    return exists(dirname(env.nginx_htdocs), use_sudo=True)
+
+
+def _setup_project_directories():
+    sudo('mkdir -p %(virtenv)s' % env)
+    # prepare gunicorn_logfile
+    sudo('touch %s' % env.gunicorn_logfile)
+    sudo('chown %s %s' % (env.django_user, env.gunicorn_logfile))
+    # prepare supervisor_stdout_logfile
+    sudo('touch %s' % env.supervisor_stdout_logfile)
+    sudo('chown %s %s' % (env.django_user, env.supervisor_stdout_logfile))
+
+
+def _remove_project_files():
+    sudo('rm -rf %s' % env.virtenv)
+    sudo('rm -rf %s' % env.code_root)
+    sudo('rm -rf %s' % env.gunicorn_logfile)
+    sudo('rm -rf %s' % env.supervisor_stdout_logfile)
+    # remove nginx conf
+    sudo('rm -rf %s' % env.nginx_conf_file)
+    sudo('rm -rf /etc/nginx/sites-enabled/%s' % basename(env.nginx_conf_file))
+    # remove supervisord conf
+    sudo('rm -rf %s' % env.supervisord_conf_file)
+    sudo('rm -rf /etc/supervisor/conf.d/%s' % basename(env.supervisord_conf_file))
+    # remove rungunicorn script
+    sudo('rm -rf %s' % env.rungunicorn_script)
 
 
 def virtenvrun(command):
@@ -387,6 +429,10 @@ def _test_nginx_conf():
         abort(red_bg('NGINX configuration test failed! Please review your parameters.'))
 
 
+def _reload_nginx():
+    sudo('nginx -s reload')
+
+
 def _upload_nginx_conf():
     ''' upload nginx conf '''
     local_nginx_conf_file = 'nginx.conf'
@@ -404,7 +450,7 @@ def _upload_nginx_conf():
 
     sudo('ln -sf %s /etc/nginx/sites-enabled/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
     _test_nginx_conf()
-    sudo('nginx -s reload')
+    _reload_nginx()
 
 
 def _reload_supervisorctl():
