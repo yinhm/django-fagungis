@@ -23,7 +23,7 @@ fagungis_path = dirname(abspath(__file__))
 @task
 def setup():
     #  test configuration start
-    if not test_configuration():
+    if not test():
         if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
     #  test configuration end
@@ -37,20 +37,24 @@ def setup():
         _push_key()
         _verify_sudo
         _install_dependencies()
-        _create_django_user()
         _setup_directories()
 
-    _setup_project_directories()
+    if not _projects_path_exist():
+        _create_runner_user()
+        _setup_project_directories()
+
     if env.repository_type == 'hg':
         _hg_clone()
     else:
         _git_clone()
+
     _install_virtualenv()
     _create_virtualenv()
     _install_gunicorn()
     _install_requirements()
     _upload_rungunicorn_script()
     _upload_supervisord_conf()
+
     _upload_nginx_conf()
 
     end_time = datetime.now()
@@ -62,7 +66,7 @@ def setup():
 @task
 def deploy():
     #  test configuration start
-    if not test_configuration():
+    if not test():
         if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
     #  test configuration end
@@ -73,16 +77,17 @@ def deploy():
     puts(green_bg('Start deploy...'))
     start_time = datetime.now()
 
-    if env.repository_type == 'hg':
-        hg_pull()
-    else:
-        git_pull()
+    src_pull()
     _install_requirements()
+
     _upload_nginx_conf()
     _upload_rungunicorn_script()
     _upload_supervisord_conf()
-    _prepare_django_project()
-    _prepare_media_path()
+
+    if env.django_enabled:
+        _prepare_django_project()
+        _prepare_media_path()
+
     _supervisor_restart()
 
     end_time = datetime.now()
@@ -93,7 +98,7 @@ def deploy():
 @task
 def remove():
     #  test configuration start
-    if not test_configuration():
+    if not test():
         if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
     #  test configuration end
@@ -105,6 +110,7 @@ def remove():
 
     _remove_project_files()
     _reload_supervisorctl()
+
     _reload_nginx()
 
     end_time = datetime.now()
@@ -114,17 +120,16 @@ def remove():
 
 
 @task
-def hg_pull():
+def src_pull():
     with cd(env.code_root):
-        sudo('hg pull -u')
+        if env.repository_type == 'hg':
+            sudo('hg pull -u')
+        else:
+            sudo('git pull -u')
+
 
 @task
-def git_pull():
-    with cd(env.code_root):
-        sudo('git pull -u')
-
-@task
-def test_configuration(verbose=True):
+def test(verbose=True):
     errors = []
     parameters_info = []
     if 'project' not in env or not env.project:
@@ -139,18 +144,18 @@ def test_configuration(verbose=True):
         errors.append('Hosts configuration missing')
     elif verbose:
         parameters_info.append(('Hosts', env.hosts))
-    if 'django_user' not in env or not env.django_user:
-        errors.append('Django user missing')
+    if 'runner_user' not in env or not env.runner_user:
+        errors.append('Runner user missing')
     elif verbose:
-        parameters_info.append(('Django user', env.django_user))
-    if 'django_user_group' not in env or not env.django_user_group:
-        errors.append('Django user group missing')
+        parameters_info.append(('Runner user', env.runner_user))
+    if 'runner_group' not in env or not env.runner_group:
+        errors.append('Runner user group missing')
     elif verbose:
-        parameters_info.append(('Django user group', env.django_user_group))
-    if 'django_user_home' not in env or not env.django_user_home:
-        errors.append('Django user home dir missing')
+        parameters_info.append(('Runner user group', env.runner_group))
+    if 'deploy_root' not in env or not env.deploy_root:
+        errors.append('Deploy root dir missing')
     elif verbose:
-        parameters_info.append(('Django user home dir', env.django_user_home))
+        parameters_info.append(('Deploy root dir', env.deploy_root))
     if 'projects_path' not in env or not env.projects_path:
         errors.append('Projects path configuration missing')
     elif verbose:
@@ -159,10 +164,6 @@ def test_configuration(verbose=True):
         errors.append('Code root configuration missing')
     elif verbose:
         parameters_info.append(('Code root', env.code_root))
-    if 'django_project_root' not in env or not env.django_project_root:
-        errors.append('Django project root configuration missing')
-    elif verbose:
-        parameters_info.append(('Django project root', env.django_project_root))
     if 'django_project_settings' not in env or not env.django_project_settings:
         env.django_project_settings = 'settings'
     if verbose:
@@ -219,6 +220,7 @@ def test_configuration(verbose=True):
         errors.append('"gunicorn_loglevel" configuration missing')
     elif verbose:
         parameters_info.append(('gunicorn_loglevel', env.gunicorn_loglevel))
+
     if 'nginx_server_name' not in env or not env.nginx_server_name:
         errors.append('"nginx_server_name" configuration missing')
     elif verbose:
@@ -298,20 +300,19 @@ def test_configuration(verbose=True):
 ########################
 
 
-def _create_django_user():
+def _create_runner_user():
     with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
-        res = sudo('useradd -d %(django_user_home)s -m -r %(django_user)s' % env)
+        res = sudo('useradd -d %(deploy_root)s -m -r %(runner_user)s' % env)
     if 'already exists' in res:
-        puts('User \'%(django_user)s\' already exists, will not be changed.' % env)
+        puts('User \'%(runner_user)s\' already exists, will not be changed.' % env)
         return
     #  set password
-    sudo('passwd %(django_user)s' % env)
+    sudo('passwd %(runner_user)s' % env)
 
 
 def _verify_sudo():
     ''' we just check if the user is sudoers '''
     sudo('cd .')
-
 
 def _install_nginx():
     # add nginx stable ppa
@@ -359,36 +360,41 @@ def _create_virtualenv():
 
 
 def _setup_directories():
-    sudo('mkdir -p %(projects_path)s' % env)
-    # sudo('mkdir -p %(django_user_home)s/logs/nginx' % env)  # Not used
+    # sudo('mkdir -p %(deploy_root)s/logs/nginx' % env)  # Not used
     # prepare gunicorn_logfile directory
     sudo('mkdir -p %s' % dirname(env.gunicorn_logfile))
-    sudo('chown %s %s' % (env.django_user, dirname(env.gunicorn_logfile)))
+    sudo('chown %s %s' % (env.runner_user, dirname(env.gunicorn_logfile)))
     sudo('chmod -R 775 %s' % dirname(env.gunicorn_logfile))
     # prepare supervisor_stdout_logfile directory
     sudo('mkdir -p %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('chown %s %s' % (env.django_user, dirname(env.supervisor_stdout_logfile)))
+    sudo('chown %s %s' % (env.runner_user, dirname(env.supervisor_stdout_logfile)))
     sudo('chmod -R 775 %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
     sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
     sudo('mkdir -p %s' % dirname(env.rungunicorn_script))
-    sudo('mkdir -p %(django_user_home)s/tmp' % env)
+    sudo('mkdir -p %(deploy_root)s/tmp' % env)
+
+    sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
     sudo('mkdir -p %(nginx_htdocs)s' % env)
     sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
 
 
 def _directories_exist():
-    return exists(dirname(env.nginx_htdocs), use_sudo=True)
+    return exists(join(env.deploy_root, 'logs'), use_sudo=True)
 
+
+def _projects_path_exist():
+    return exists(env.projects_path, use_sudo=True)
 
 def _setup_project_directories():
+    sudo('mkdir -p %(projects_path)s' % env)
+
     sudo('mkdir -p %(virtenv)s' % env)
     # prepare gunicorn_logfile
     sudo('touch %s' % env.gunicorn_logfile)
-    sudo('chown %s %s' % (env.django_user, env.gunicorn_logfile))
+    sudo('chown %s %s' % (env.runner_user, env.gunicorn_logfile))
     # prepare supervisor_stdout_logfile
     sudo('touch %s' % env.supervisor_stdout_logfile)
-    sudo('chown %s %s' % (env.django_user, env.supervisor_stdout_logfile))
+    sudo('chown %s %s' % (env.runner_user, env.supervisor_stdout_logfile))
 
 
 def _remove_project_files():
@@ -396,9 +402,11 @@ def _remove_project_files():
     sudo('rm -rf %s' % env.code_root)
     sudo('rm -rf %s' % env.gunicorn_logfile)
     sudo('rm -rf %s' % env.supervisor_stdout_logfile)
+    
     # remove nginx conf
     sudo('rm -rf %s' % env.nginx_conf_file)
     sudo('rm -rf /etc/nginx/sites-enabled/%s' % basename(env.nginx_conf_file))
+
     # remove supervisord conf
     sudo('rm -rf %s' % env.supervisord_conf_file)
     sudo('rm -rf /etc/supervisor/conf.d/%s' % basename(env.supervisord_conf_file))
@@ -472,7 +480,7 @@ def _upload_supervisord_conf():
 
 
 def _prepare_django_project():
-    with cd(env.django_project_root):
+    with cd(env.code_root):
         virtenvrun('python manage.py syncdb --noinput --verbosity=1')
         if env.south_used:
             virtenvrun('python manage.py migrate --noinput --verbosity=1')
@@ -517,3 +525,75 @@ def _read_key_file(key_file):
 def _push_key(key_file='~/.ssh/id_rsa.pub'):
     key_text = _read_key_file(key_file)
     append('~/.ssh/authorized_keys', key_text)
+
+
+def expand_config(env):
+    #  system user, owner of the processes and code on your server
+    #  the user and it's home dir will be created if not present
+    env.runner_user = 'www-data'
+    # user group
+    env.runner_group = env.runner_user
+    #  the code of your project will be located here
+    env.deploy_root = join('/srv', 'www')
+    #  projects path
+    env.projects_path = join(env.deploy_root, env.project)
+    #  the root path of your project
+    env.code_root = join(env.projects_path, 'src')
+
+    env.django_enabled = False
+    #  the Python path to a Django settings module.
+    env.django_project_settings = 'cgt/settings.py'
+    #  django media dir
+    env.django_media_path = join(env.code_root, 'static/media')
+    #  django static dir
+    env.django_static_path = join(env.code_root, 'static')
+    #  django media url and root dir
+    env.django_media_url = '/media/'
+    env.django_media_root = env.code_root
+    #  django static url and root dir
+    env.django_static_url = '/static/'
+    #  do you use south in your django project?
+    env.south_used = False
+
+    #  virtualenv root
+    env.virtenv = join(env.deploy_root, 'envs', env.project)
+    #  some virtualenv options, must have at least one
+    env.virtenv_options = ['distribute', 'no-site-packages', ]
+    #  location of your pip requirements file
+    #  http://www.pip-installer.org/en/latest/requirements.html#the-requirements-file-format
+    #  set it to None to not use
+    env.requirements_file = join(env.code_root, 'pip.txt')
+    #  always ask user for confirmation when run any tasks
+    env.ask_confirmation = True
+
+    ### START gunicorn settings ###
+    #  be sure to not have anything running on that port
+    env.gunicorn_bind = "127.0.0.1:3000"
+    env.gunicorn_logfile = '%(deploy_root)s/logs/%(project)s_gunicorn.log' % env
+    env.rungunicorn_script = '%(deploy_root)s/scripts/rungunicorn_%(project)s.sh' % env
+    env.gunicorn_workers = 2
+    env.gunicorn_worker_class = "eventlet"
+    env.gunicorn_loglevel = "info"
+    ### END gunicorn settings ###
+
+    ### START nginx settings ###
+    env.nginx_server_name = 'deploy.caigengtan.com'  # Only domain name, without 'www' or 'http://'
+    env.nginx_conf_file = '%(deploy_root)s/configs/nginx/%(project)s.conf' % env
+    env.nginx_client_max_body_size = 10  # Maximum accepted body size of client request, in MB
+    env.nginx_htdocs = '%(deploy_root)s/htdocs' % env
+    # will configure nginx with ssl on, your certificate must be installed
+    # more info here: http://wiki.nginx.org/HttpSslModule
+    env.nginx_https = False
+    ### END nginx settings ###
+
+    ### START supervisor settings ###
+    # http://supervisord.org/configuration.html#program-x-section-settings
+    # default: env.project
+    env.supervisor_program_name = env.project
+    env.supervisorctl = '/usr/bin/supervisorctl'  # supervisorctl script
+    env.supervisor_autostart = 'true'  # true or false
+    env.supervisor_autorestart = 'true'  # true or false
+    env.supervisor_redirect_stderr = 'true'  # true or false
+    env.supervisor_stdout_logfile = '%(deploy_root)s/logs/supervisord_%(project)s.log' % env
+    env.supervisord_conf_file = '%(deploy_root)s/configs/supervisord/%(project)s.conf' % env
+    ### END supervisor settings ###
