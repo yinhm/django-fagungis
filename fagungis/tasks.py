@@ -375,7 +375,7 @@ def _setup_directories():
 
     sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
     sudo('mkdir -p %(nginx_htdocs)s' % env)
-    sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
+    sudo('echo "<html><body>Welcome to nginx!</body></html> " > %(nginx_htdocs)s/index.html' % env)
 
 
 def _directories_exist():
@@ -481,10 +481,14 @@ def _upload_supervisord_conf():
 
 def _prepare_django_project():
     with cd(env.code_root):
-        virtenvrun('python manage.py syncdb --noinput --verbosity=1')
+        settings = "--settings=%s" % (env.django_project_settings,)
+        virtenvrun('python manage.py syncdb --noinput --verbosity=1 %s' % \
+                   settings)
         if env.south_used:
-            virtenvrun('python manage.py migrate --noinput --verbosity=1')
-        virtenvsudo('python manage.py collectstatic --noinput')
+            virtenvrun('python manage.py migrate --noinput --verbosity=1 %s' % \
+                       settings)
+        virtenvsudo('python manage.py collectstatic --noinput %s' % \
+                    settings)
 
 
 def _prepare_media_path():
@@ -542,16 +546,19 @@ def expand_config(env):
 
     env.django_enabled = False
     #  the Python path to a Django settings module.
-    env.django_project_settings = 'cgt/settings.py'
+    env.django_project_settings = 'settings'
+
+    env.django_public_path = join(env.projects_path, 'public')
     #  django media dir
-    env.django_media_path = join(env.code_root, 'static/media')
+    env.django_media_path = join(env.django_public_path, 'media')
     #  django static dir
-    env.django_static_path = join(env.code_root, 'static')
+    env.django_static_path = join(env.django_public_path, 'static')
     #  django media url and root dir
     env.django_media_url = '/media/'
-    env.django_media_root = env.code_root
+    env.django_media_root = env.django_media_path
     #  django static url and root dir
     env.django_static_url = '/static/'
+    env.django_static_root = env.django_static_path
     #  do you use south in your django project?
     env.south_used = False
 
@@ -577,7 +584,7 @@ def expand_config(env):
     ### END gunicorn settings ###
 
     ### START nginx settings ###
-    env.nginx_server_name = 'deploy.caigengtan.com'  # Only domain name, without 'www' or 'http://'
+    env.nginx_server_name = 'deploy.example.com'  # Only domain name, without 'www' or 'http://'
     env.nginx_conf_file = '%(deploy_root)s/configs/nginx/%(project)s.conf' % env
     env.nginx_client_max_body_size = 10  # Maximum accepted body size of client request, in MB
     env.nginx_htdocs = '%(deploy_root)s/htdocs' % env
