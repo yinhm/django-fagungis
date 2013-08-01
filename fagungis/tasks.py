@@ -495,6 +495,7 @@ def _prepare_media_path():
     path = env.django_media_path.rstrip('/')
     sudo('mkdir -p %s' % path)
     sudo('chmod -R 775 %s' % path)
+    sudo('chown %s %s' % (env.runner_user, path))
 
 
 def _upload_rungunicorn_script():
