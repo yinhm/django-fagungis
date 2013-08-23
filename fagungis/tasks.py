@@ -330,6 +330,7 @@ def _install_dependencies():
         "build-essential",
         "python-pip",
         "supervisor",
+        "inotify-tools",
     ]
     sudo("apt-get update")
     sudo("apt-get -y install %s" % " ".join(packages))
